@@ -1,0 +1,147 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Вибір пристрою Marstek",
+        "description": "Оберіть знайдений у вашій локальній мережі пристрій Marstek або оберіть ручне введення.",
+        "data": {
+          "device": "Пристрій"
+        }
+      },
+      "manual": {
+        "title": "Ручне введення параметрів",
+        "description": "Введіть IP-адресу та UDP-порт вашого пристрою Marstek (за замовчуванням порт 30000).",
+        "data": {
+          "host": "IP-адреса / Хост",
+          "port": "UDP Порт",
+          "scan_interval": "Інтервал оновлення (секунд)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не вдалося підключитися до пристрою Marstek. Переконайтеся, що функцію Open API увімкнено в мобільному додатку та IP/порт вказано правильно."
+    },
+    "abort": {
+      "already_configured": "Цей пристрій вже налаштовано в Home Assistant."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Налаштування Marstek",
+        "data": {
+          "scan_interval": "Інтервал оновлення (секунд)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "grid_power_present": {
+        "name": "Наявність напруги в мережі (Grid Power)"
+      },
+      "backup_power_active": {
+        "name": "Резервне живлення активне (Off-Grid / UPS)"
+      },
+      "battery_charging": {
+        "name": "Заряджання батареї"
+      },
+      "battery_charging_permission": {
+        "name": "Дозвіл на заряджання"
+      },
+      "battery_discharging_permission": {
+        "name": "Дозвіл на розряджання"
+      },
+      "ct_connected": {
+        "name": "Трансформатор струму підключено"
+      }
+    },
+    "sensor": {
+      "battery_soc": {
+        "name": "Рівень заряду батареї (SOC)"
+      },
+      "ongrid_power": {
+        "name": "Потужність мережі (On-Grid)"
+      },
+      "offgrid_power": {
+        "name": "Потужність резерву (Off-Grid)"
+      },
+      "battery_power": {
+        "name": "Потужність батареї"
+      },
+      "pv_power": {
+        "name": "Сонячна потужність (PV)"
+      },
+      "pv_voltage": {
+        "name": "Напруга сонячних панелей"
+      },
+      "pv_current": {
+        "name": "Струм сонячних панелей"
+      },
+      "battery_temperature": {
+        "name": "Температура батареї"
+      },
+      "battery_capacity": {
+        "name": "Поточна ємність батареї"
+      },
+      "rated_capacity": {
+        "name": "Номінальна ємність"
+      },
+      "remaining_runtime": {
+        "name": "Прогноз часу роботи (автономність)"
+      },
+      "total_pv_energy": {
+        "name": "Всього згенеровано сонцем"
+      },
+      "total_grid_output_energy": {
+        "name": "Всього віддано в мережу"
+      },
+      "total_grid_input_energy": {
+        "name": "Всього спожито з мережі"
+      },
+      "total_load_energy": {
+        "name": "Всього спожито навантаженням"
+      },
+      "wifi_rssi": {
+        "name": "Сигнал WiFi (RSSI)"
+      },
+      "wifi_ssid": {
+        "name": "Назва мережі WiFi (SSID)"
+      },
+      "device_ip": {
+        "name": "IP-адреса пристрою"
+      },
+      "em_total_power": {
+        "name": "Сумарна потужність лічильника (EM)"
+      }
+    },
+    "select": {
+      "operating_mode": {
+        "name": "Режим роботи",
+        "state": {
+          "Auto": "Автоматичний (Auto)",
+          "AI": "Штучний інтелект (AI)",
+          "Manual": "Ручний (Manual)",
+          "Passive": "Пасивний (Passive)",
+          "UPS": "Джерело безперебійного живлення (UPS)"
+        }
+      }
+    },
+    "number": {
+      "depth_of_discharge": {
+        "name": "Глибина розряду (DOD)"
+      },
+      "passive_mode_power": {
+        "name": "Потужність пасивного режиму"
+      }
+    },
+    "switch": {
+      "led_display": {
+        "name": "LED-індикація дисплея"
+      },
+      "bluetooth_broadcast": {
+        "name": "Трансляція Bluetooth (BLE)"
+      }
+    }
+  }
+}

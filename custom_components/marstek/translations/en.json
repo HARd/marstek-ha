@@ -1,0 +1,147 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select Marstek Device",
+        "description": "Choose a discovered Marstek device on your local network, or select manual entry.",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "manual": {
+        "title": "Manual Device Entry",
+        "description": "Enter the IP address and UDP port of your Marstek device.",
+        "data": {
+          "host": "IP Address / Host",
+          "port": "UDP Port",
+          "scan_interval": "Update Interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Marstek device. Please ensure Open API is enabled in the app and IP/Port are correct."
+    },
+    "abort": {
+      "already_configured": "Device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Marstek Options",
+        "data": {
+          "scan_interval": "Update Interval (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "grid_power_present": {
+        "name": "Grid Power Present"
+      },
+      "backup_power_active": {
+        "name": "Backup Power Active (Off-Grid)"
+      },
+      "battery_charging": {
+        "name": "Battery Charging"
+      },
+      "battery_charging_permission": {
+        "name": "Charging Permission"
+      },
+      "battery_discharging_permission": {
+        "name": "Discharging Permission"
+      },
+      "ct_connected": {
+        "name": "CT Meter Connected"
+      }
+    },
+    "sensor": {
+      "battery_soc": {
+        "name": "Battery SOC"
+      },
+      "ongrid_power": {
+        "name": "On-Grid Power"
+      },
+      "offgrid_power": {
+        "name": "Off-Grid (Backup) Power"
+      },
+      "battery_power": {
+        "name": "Battery Power"
+      },
+      "pv_power": {
+        "name": "Solar (PV) Power"
+      },
+      "pv_voltage": {
+        "name": "Solar (PV) Voltage"
+      },
+      "pv_current": {
+        "name": "Solar (PV) Current"
+      },
+      "battery_temperature": {
+        "name": "Battery Temperature"
+      },
+      "battery_capacity": {
+        "name": "Battery Capacity"
+      },
+      "rated_capacity": {
+        "name": "Rated Capacity"
+      },
+      "remaining_runtime": {
+        "name": "Remaining Battery Runtime"
+      },
+      "total_pv_energy": {
+        "name": "Total Solar Generated"
+      },
+      "total_grid_output_energy": {
+        "name": "Total Grid Export"
+      },
+      "total_grid_input_energy": {
+        "name": "Total Grid Import"
+      },
+      "total_load_energy": {
+        "name": "Total Load Energy"
+      },
+      "wifi_rssi": {
+        "name": "WiFi Signal (RSSI)"
+      },
+      "wifi_ssid": {
+        "name": "WiFi SSID"
+      },
+      "device_ip": {
+        "name": "Device IP"
+      },
+      "em_total_power": {
+        "name": "Energy Meter Total Power"
+      }
+    },
+    "select": {
+      "operating_mode": {
+        "name": "Operating Mode",
+        "state": {
+          "Auto": "Auto",
+          "AI": "AI",
+          "Manual": "Manual",
+          "Passive": "Passive",
+          "UPS": "UPS"
+        }
+      }
+    },
+    "number": {
+      "depth_of_discharge": {
+        "name": "Depth of Discharge (DOD)"
+      },
+      "passive_mode_power": {
+        "name": "Passive Mode Power Setting"
+      }
+    },
+    "switch": {
+      "led_display": {
+        "name": "LED Display"
+      },
+      "bluetooth_broadcast": {
+        "name": "Bluetooth Broadcast"
+      }
+    }
+  }
+}
