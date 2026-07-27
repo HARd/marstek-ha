@@ -85,7 +85,7 @@ class MarstekApiClient:
                 return await self._async_send_datagram(data, req_id, timeout)
             except MarstekTimeoutError:
                 if attempt > retries:
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Timeout waiting for Marstek response (%s:%s, method=%s) after %d attempts",
                         self.host,
                         self.port,
