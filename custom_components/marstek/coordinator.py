@@ -68,7 +68,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("Temporary UDP packet drop for ES.GetStatus (attempt %s), retaining previous valid telemetry", self._consecutive_errors)
 
         # Small delay between UDP packets to prevent buffer congestion on ESP-style Wi-Fi modules
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.25)
 
         # 2. Fetch Battery Status (soc, charg_flag, dischrg_flag, temp, capacity)
         try:
@@ -78,7 +78,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             _LOGGER.debug("Could not fetch Bat.GetStatus: %s", err)
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.25)
 
         # 3. Fetch ES Mode (current mode: Auto, AI, Manual, Passive, UPS, ct_state)
         try:
@@ -88,7 +88,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             _LOGGER.debug("Could not fetch ES.GetMode: %s", err)
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.25)
 
         # 4. Fetch PV Status (solar power, voltage, current)
         try:
@@ -98,7 +98,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             _LOGGER.debug("Could not fetch PV.GetStatus: %s", err)
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.25)
 
         # 5. Fetch EM Status (Energy Meter CT Phase powers)
         try:
@@ -108,7 +108,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             _LOGGER.debug("Could not fetch EM.GetStatus: %s", err)
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.25)
 
         # 6. Fetch Wifi Status (RSSI, SSID, IP)
         try:
@@ -118,7 +118,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             _LOGGER.debug("Could not fetch Wifi.GetStatus: %s", err)
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.25)
 
         # 7. Fetch BLE Status
         try:

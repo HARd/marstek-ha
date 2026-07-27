@@ -1,6 +1,7 @@
 """Select platform for Marstek Energy System."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -74,4 +75,5 @@ class MarstekOperatingModeSelect(CoordinatorEntity[MarstekDataUpdateCoordinator]
         power = self.coordinator.last_passive_power
         cd_time = self.coordinator.last_passive_cd_time
         await self.coordinator.client.async_set_es_mode(option, power=power, cd_time=cd_time)
+        await asyncio.sleep(1.0)
         await self.coordinator.async_request_refresh()
