@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import MarstekApiClient, MarstekApiError
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, SLOW_UPDATE_CYCLES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,11 +36,21 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_passive_power: int = 100
         self.last_passive_cd_time: int = 3600
         self._consecutive_errors: int = 0
+        self._slow_countdown: int = 0
+
+    def request_full_update(self) -> None:
+        """Force the slow endpoint group to be polled on the next update."""
+        self._slow_countdown = 0
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Marstek device via UDP."""
         # Start with a shallow copy of previous valid data so temporary UDP packet loss does not cause sensors to flip to Unknown/Unavailable
         data: dict[str, Any] = dict(self.data) if self.data else {}
+
+        # Only ES/Bat telemetry needs per-cycle resolution. Everything else changes
+        # slowly, and the device reboots if we flood it with UDP requests.
+        run_slow = self._slow_countdown <= 0
+        self._slow_countdown = SLOW_UPDATE_CYCLES - 1 if run_slow else self._slow_countdown - 1
 
         # Fetch basic device info once if not yet fetched
         if not self.device_info_data:
@@ -78,55 +88,23 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             _LOGGER.debug("Could not fetch Bat.GetStatus: %s", err)
 
-        await asyncio.sleep(0.25)
-
-        # 3. Fetch ES Mode (current mode: Auto, AI, Manual, Passive, UPS, ct_state)
-        try:
-            mode_res = await self.client.async_get_es_mode()
-            if mode_res and "result" in mode_res:
-                data["es_mode"] = mode_res["result"]
-        except Exception as err:
-            _LOGGER.debug("Could not fetch ES.GetMode: %s", err)
-
-        await asyncio.sleep(0.25)
-
-        # 4. Fetch PV Status (solar power, voltage, current)
-        try:
-            pv_res = await self.client.async_get_pv_status()
-            if pv_res and "result" in pv_res:
-                data["pv_status"] = pv_res["result"]
-        except Exception as err:
-            _LOGGER.debug("Could not fetch PV.GetStatus: %s", err)
-
-        await asyncio.sleep(0.25)
-
-        # 5. Fetch EM Status (Energy Meter CT Phase powers)
-        try:
-            em_res = await self.client.async_get_em_status()
-            if em_res and "result" in em_res:
-                data["em_status"] = em_res["result"]
-        except Exception as err:
-            _LOGGER.debug("Could not fetch EM.GetStatus: %s", err)
-
-        await asyncio.sleep(0.25)
-
-        # 6. Fetch Wifi Status (RSSI, SSID, IP)
-        try:
-            wifi_res = await self.client.async_get_wifi_status()
-            if wifi_res and "result" in wifi_res:
-                data["wifi_status"] = wifi_res["result"]
-        except Exception as err:
-            _LOGGER.debug("Could not fetch Wifi.GetStatus: %s", err)
-
-        await asyncio.sleep(0.25)
-
-        # 7. Fetch BLE Status
-        try:
-            ble_res = await self.client.async_get_ble_status()
-            if ble_res and "result" in ble_res:
-                data["ble_status"] = ble_res["result"]
-        except Exception as err:
-            _LOGGER.debug("Could not fetch BLE.GetStatus: %s", err)
+        # 3. Slow group - mode, PV, meter, wifi and BLE barely move between cycles,
+        # so they are polled once every SLOW_UPDATE_CYCLES instead of every update.
+        if run_slow:
+            for method, fetch, key in (
+                ("ES.GetMode", self.client.async_get_es_mode, "es_mode"),
+                ("PV.GetStatus", self.client.async_get_pv_status, "pv_status"),
+                ("EM.GetStatus", self.client.async_get_em_status, "em_status"),
+                ("Wifi.GetStatus", self.client.async_get_wifi_status, "wifi_status"),
+                ("BLE.GetStatus", self.client.async_get_ble_status, "ble_status"),
+            ):
+                await asyncio.sleep(0.25)
+                try:
+                    res = await fetch()
+                    if res and "result" in res:
+                        data[key] = res["result"]
+                except Exception as err:
+                    _LOGGER.debug("Could not fetch %s: %s", method, err)
 
         # Attach cached device info
         data["device_info"] = self.device_info_data

@@ -53,6 +53,7 @@ class MarstekApiClient:
         self.port = port
         self._msg_id = 0
         self._lock = asyncio.Lock()
+        self._sock: socket.socket | None = None
 
     def _next_id(self) -> int:
         """Get the next sequential message ID."""
@@ -108,14 +109,34 @@ class MarstekApiClient:
 
         raise MarstekTimeoutError(f"No response from {self.host}:{self.port} for {method}")
 
+    def _get_socket(self) -> socket.socket:
+        """Return the long-lived UDP socket, recreating it if it was closed.
+
+        The socket is deliberately kept open for the lifetime of the client so all
+        requests originate from a single source port. Opening a fresh socket per
+        request makes the device see tens of thousands of distinct UDP endpoints per
+        day, and late replies land on an already-closed port, which bounces an ICMP
+        port-unreachable back at it.
+        """
+        if self._sock is None or self._sock.fileno() == -1:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setblocking(False)
+            self._sock = sock
+        return self._sock
+
+    def close(self) -> None:
+        """Close the UDP socket."""
+        if self._sock is not None:
+            self._sock.close()
+            self._sock = None
+
     async def _async_send_datagram(
         self, data: bytes, req_id: int, timeout: float
     ) -> dict[str, Any]:
         """Send datagram and wait for matching response ID using asyncio socket."""
         async with self._lock:
             loop = asyncio.get_running_loop()
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.setblocking(False)
+            sock = self._get_socket()
 
             try:
                 await loop.sock_sendto(sock, data, (self.host, self.port))
@@ -142,6 +163,10 @@ class MarstekApiClient:
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         continue
 
+                    # Skip late replies to earlier requests still sitting in the buffer
+                    if req_id != 0 and resp_json.get("id") != req_id:
+                        continue
+
                     # Check for error object in response
                     if "error" in resp_json and resp_json["error"]:
                         err_info = resp_json["error"]
@@ -149,15 +174,16 @@ class MarstekApiClient:
                             f"Device returned error {err_info.get('code')}: {err_info.get('message')}"
                         )
 
-                    # Check matching request ID
-                    if resp_json.get("id") == req_id or req_id == 0:
-                        return resp_json
+                    return resp_json
 
                 raise MarstekTimeoutError(
                     f"Timeout waiting for response ID {req_id} from {self.host}:{self.port}"
                 )
-            finally:
-                sock.close()
+            except OSError:
+                # Socket is unusable (interface change, fd error) - drop it so the
+                # next call builds a fresh one.
+                self.close()
+                raise
 
     @classmethod
     async def async_discover_devices(

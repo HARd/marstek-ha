@@ -141,6 +141,8 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception as err:
                 _LOGGER.error("Error connecting to %s:%s - %s", host, port, err)
                 errors["base"] = "cannot_connect"
+            finally:
+                client.close()
 
         schema = vol.Schema(
             {
@@ -164,15 +166,15 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Get the options flow for this handler."""
-        return MarstekOptionsFlowHandler(config_entry)
+        return MarstekOptionsFlowHandler()
 
 
 class MarstekOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle Marstek options."""
+    """Handle Marstek options.
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
+    `config_entry` is provided by the base class - assigning to it raises, since
+    it is a read-only property.
+    """
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

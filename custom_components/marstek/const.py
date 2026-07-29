@@ -7,6 +7,8 @@ DEFAULT_PORT: Final = 30000
 DEFAULT_SCAN_INTERVAL: Final = 10  # seconds, fast for Switchbot response
 MIN_SCAN_INTERVAL: Final = 5
 MAX_SCAN_INTERVAL: Final = 60
+# Slow-changing endpoints (mode, PV, meter, wifi, BLE) are polled once every N cycles
+SLOW_UPDATE_CYCLES: Final = 6
 
 # Configuration keys
 CONF_HOST: Final = "host"

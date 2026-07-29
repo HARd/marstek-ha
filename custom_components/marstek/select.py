@@ -76,4 +76,5 @@ class MarstekOperatingModeSelect(CoordinatorEntity[MarstekDataUpdateCoordinator]
         cd_time = self.coordinator.last_passive_cd_time
         await self.coordinator.client.async_set_es_mode(option, power=power, cd_time=cd_time)
         await asyncio.sleep(1.0)
+        self.coordinator.request_full_update()
         await self.coordinator.async_request_refresh()

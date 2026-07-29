@@ -138,4 +138,5 @@ class MarstekNumberEntity(CoordinatorEntity[MarstekDataUpdateCoordinator], Numbe
                     MODE_PASSIVE, power=int_val, cd_time=self.coordinator.last_passive_cd_time
                 )
         await asyncio.sleep(1.0)
+        self.coordinator.request_full_update()
         await self.coordinator.async_request_refresh()
