@@ -10,6 +10,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import MarstekApiClient, MarstekApiError
+from .cloud import (
+    MarstekCloudClient,
+    MarstekCloudError,
+    cloud_device_info,
+    cloud_to_data,
+)
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, SLOW_UPDATE_CYCLES
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,6 +29,8 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         client: MarstekApiClient,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
+        cloud: MarstekCloudClient | None = None,
+        cloud_devid: str | None = None,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -32,6 +40,9 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=scan_interval),
         )
         self.client = client
+        self.cloud = cloud
+        self.cloud_devid = cloud_devid
+        self.platforms: list[str] = []
         self.device_info_data: dict[str, Any] = {}
         self.last_passive_power: int = 100
         self.last_passive_cd_time: int = 3600
@@ -43,6 +54,35 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._slow_countdown = 0
 
     async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch telemetry from whichever source this entry is configured for."""
+        if self.cloud is not None:
+            return await self._async_update_cloud()
+        return await self._async_update_local()
+
+    async def _async_update_cloud(self) -> dict[str, Any]:
+        """Fetch telemetry from the Marstek cloud. Sends nothing to the station."""
+        try:
+            devices = await self.cloud.async_get_devices()
+        except MarstekCloudError as err:
+            raise UpdateFailed(f"Error communicating with Marstek cloud: {err}") from err
+
+        device = next(
+            (d for d in devices if str(d.get("devid")) == str(self.cloud_devid)),
+            None,
+        )
+        if device is None:
+            raise UpdateFailed(
+                f"Device {self.cloud_devid} is not present in the Marstek cloud account"
+            )
+
+        if not self.device_info_data:
+            self.device_info_data = cloud_device_info(device)
+
+        data = cloud_to_data(device)
+        data["device_info"] = self.device_info_data
+        return data
+
+    async def _async_update_local(self) -> dict[str, Any]:
         """Fetch data from Marstek device via UDP."""
         # Start with a shallow copy of previous valid data so temporary UDP packet loss does not cause sensors to flip to Unknown/Unavailable
         data: dict[str, Any] = dict(self.data) if self.data else {}

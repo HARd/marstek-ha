@@ -12,6 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
+    CURRENCY_EURO,
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     UnitOfElectricCurrent,
@@ -35,6 +36,11 @@ from .coordinator import MarstekDataUpdateCoordinator
 class MarstekSensorEntityDescription(SensorEntityDescription):
     """Describes Marstek sensor entity."""
     value_fn: Callable[[dict[str, Any]], Any]
+    # Which data sources can actually feed this sensor. The cloud API reports far
+    # less than the local one, and several descriptions below fall back to 0, so
+    # entities that cannot be fed are not created rather than reading a fake zero.
+    local: bool = True
+    cloud: bool = False
 
 
 def _get_val(data: dict[str, Any], *keys: tuple[str, str], default: Any = None) -> Any:
@@ -103,6 +109,7 @@ SENSORS: tuple[MarstekSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:battery-high",
         value_fn=lambda data: _get_val(data, ("bat_status", "soc"), ("es_status", "bat_soc"), ("es_mode", "bat_soc")),
+        cloud=True,
     ),
     # On-Grid Power
     MarstekSensorEntityDescription(
@@ -133,6 +140,7 @@ SENSORS: tuple[MarstekSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:battery-charging-wireless",
         value_fn=lambda data: _get_val(data, ("es_status", "bat_power"), default=0),
+        cloud=True,
     ),
     # Solar / PV Power
     MarstekSensorEntityDescription(
@@ -282,6 +290,30 @@ SENSORS: tuple[MarstekSensorEntityDescription, ...] = (
         icon="mdi:gauge",
         value_fn=lambda data: _get_val(data, ("em_status", "total_power"), ("es_mode", "total_power"), default=0),
     ),
+    # Household load - cloud only, the local API has no equivalent field
+    MarstekSensorEntityDescription(
+        key="cloud_load_power",
+        translation_key="cloud_load_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:home-lightning-bolt",
+        value_fn=lambda data: _get_val(data, ("cloud", "load")),
+        local=False,
+        cloud=True,
+    ),
+    # Profit as calculated by Marstek's servers - cloud only
+    MarstekSensorEntityDescription(
+        key="cloud_profit",
+        translation_key="cloud_profit",
+        native_unit_of_measurement=CURRENCY_EURO,
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+        icon="mdi:cash",
+        value_fn=lambda data: _get_val(data, ("cloud", "profit")),
+        local=False,
+        cloud=True,
+    ),
 )
 
 
@@ -292,10 +324,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up Marstek sensor entities based on a config entry."""
     coordinator = entry.runtime_data
+    is_cloud = coordinator.cloud is not None
 
     async_add_entities(
         MarstekSensorEntity(coordinator, description, entry)
         for description in SENSORS
+        if (description.cloud if is_cloud else description.local)
     )
 
 
@@ -316,7 +350,13 @@ class MarstekSensorEntity(CoordinatorEntity[MarstekDataUpdateCoordinator], Senso
         self.entity_description = description
 
         dev_info = coordinator.device_info_data or {}
-        mac = dev_info.get("wifi_mac") or dev_info.get("ble_mac") or entry.data["host"]
+        # entry.unique_id keeps ids stable in cloud mode, where there is no MAC
+        mac = (
+            dev_info.get("wifi_mac")
+            or dev_info.get("ble_mac")
+            or entry.unique_id
+            or entry.data["host"]
+        )
         dev_name = dev_info.get("device", "Marstek Energy System")
 
         self._attr_unique_id = f"{mac}_{description.key}"

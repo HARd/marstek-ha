@@ -15,6 +15,21 @@ CONF_HOST: Final = "host"
 CONF_PORT: Final = "port"
 CONF_DEVICE_ID: Final = "device_id"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
+CONF_DATA_SOURCE: Final = "data_source"
+CONF_EMAIL: Final = "email"
+CONF_PASSWORD: Final = "password"
+CONF_CLOUD_DEVID: Final = "cloud_devid"
+
+# Telemetry sources. "cloud" reads from Marstek's servers and sends nothing to the
+# station at all - no control entities, but also no UDP load that could reboot it.
+SOURCE_LOCAL: Final = "local"
+SOURCE_CLOUD: Final = "cloud"
+DATA_SOURCES: Final = [SOURCE_LOCAL, SOURCE_CLOUD]
+
+# Cloud API (read-only - it has no control endpoints)
+CLOUD_API_LOGIN: Final = "https://eu.hamedata.com/app/Solar/v2_get_device.php"
+CLOUD_API_DEVICES: Final = "https://eu.hamedata.com/ems/api/v1/getDeviceList"
+CLOUD_TIMEOUT: Final = 10
 
 # API Methods
 METHOD_GET_DEVICE: Final = "Marstek.GetDevice"
@@ -62,4 +77,9 @@ PLATFORMS: Final = [
     "select",
     "number",
     "switch",
+]
+
+# The cloud API is read-only, so control platforms are not loaded in cloud mode.
+CLOUD_PLATFORMS: Final = [
+    "sensor",
 ]

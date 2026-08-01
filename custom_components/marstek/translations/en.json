@@ -30,9 +30,26 @@
       "init": {
         "title": "Marstek Options",
         "data": {
-          "scan_interval": "Update Interval (seconds)"
+          "data_source": "Telemetry source",
+          "scan_interval": "Update Interval (seconds)",
+          "email": "Marstek account e-mail (cloud only)",
+          "password": "Marstek account password (cloud only)"
+        },
+        "description": "Local reads everything over UDP and supports control. Cloud reads a small subset from Marstek's servers and sends nothing to the station at all - control entities are removed in that mode."
+      },
+      "cloud_device": {
+        "title": "Select Cloud Battery",
+        "description": "Your account has several batteries. Pick the one this entry represents.",
+        "data": {
+          "cloud_devid": "Battery"
         }
       }
+    },
+    "error": {
+      "cloud_auth": "Marstek cloud rejected these credentials.",
+      "cloud_unavailable": "Could not reach the Marstek cloud. Try again later.",
+      "cloud_no_devices": "No batteries found on this Marstek account.",
+      "cloud_credentials_required": "E-mail and password are required for cloud mode."
     }
   },
   "entity": {
@@ -113,6 +130,12 @@
       },
       "em_total_power": {
         "name": "Energy Meter Total Power"
+      },
+      "cloud_load_power": {
+        "name": "Load Power (Cloud)"
+      },
+      "cloud_profit": {
+        "name": "Profit (Cloud)"
       }
     },
     "select": {
@@ -141,6 +164,14 @@
       },
       "bluetooth_broadcast": {
         "name": "Bluetooth Broadcast"
+      }
+    }
+  },
+  "selector": {
+    "data_source": {
+      "options": {
+        "local": "Local (UDP, full control)",
+        "cloud": "Cloud (read-only, no load on the station)"
       }
     }
   }

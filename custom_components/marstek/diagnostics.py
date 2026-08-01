@@ -18,6 +18,15 @@ TO_REDACT = {
     "host",
     "sta_gate",
     "sta_dns",
+    # Cloud mode stores account credentials in the entry options
+    "email",
+    "mailbox",
+    "password",
+    "pwd",
+    "token",
+    "sn",
+    "devid",
+    "cloud_devid",
 }
 
 

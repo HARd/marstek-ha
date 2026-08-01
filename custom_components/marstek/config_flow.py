@@ -10,18 +10,27 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import MarstekApiClient
+from .cloud import MarstekCloudAuthError, MarstekCloudClient, MarstekCloudError
 from .const import (
+    CONF_CLOUD_DEVID,
+    CONF_DATA_SOURCE,
+    CONF_EMAIL,
     CONF_HOST,
+    CONF_PASSWORD,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
+    DATA_SOURCES,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
+    SOURCE_CLOUD,
+    SOURCE_LOCAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -176,24 +185,132 @@ class MarstekOptionsFlowHandler(config_entries.OptionsFlow):
     it is a read-only property.
     """
 
+    def __init__(self) -> None:
+        """Initialize the options flow."""
+        self._options: dict[str, Any] = {}
+        self._devices: list[dict[str, Any]] = []
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+        errors: dict[str, str] = {}
+        options = self.config_entry.options
 
-        current_interval = self.config_entry.options.get(
+        if user_input is not None:
+            # Carry the existing options forward so the credentials stay on file even
+            # while running local - flipping the source back is then a one-click
+            # change with nothing to re-enter.
+            self._options = {
+                **options,
+                CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
+                CONF_DATA_SOURCE: user_input[CONF_DATA_SOURCE],
+            }
+            email = user_input.get(CONF_EMAIL, "").strip()
+            password = user_input.get(CONF_PASSWORD, "")
+            if email:
+                self._options[CONF_EMAIL] = email
+            if password:
+                self._options[CONF_PASSWORD] = password
+
+            if user_input[CONF_DATA_SOURCE] == SOURCE_LOCAL:
+                return self.async_create_entry(title="", data=self._options)
+
+            if not email or not password:
+                errors["base"] = "cloud_credentials_required"
+            else:
+                client = MarstekCloudClient(
+                    async_get_clientsession(self.hass), email, password
+                )
+                try:
+                    devices = await client.async_get_devices()
+                except MarstekCloudAuthError:
+                    errors["base"] = "cloud_auth"
+                except MarstekCloudError as err:
+                    _LOGGER.debug("Marstek cloud unreachable: %s", err)
+                    errors["base"] = "cloud_unavailable"
+                else:
+                    if not devices:
+                        errors["base"] = "cloud_no_devices"
+                    else:
+                        self._devices = devices
+                        known = str(options.get(CONF_CLOUD_DEVID, ""))
+                        chosen = next(
+                            (d for d in devices if str(d.get("devid")) == known),
+                            devices[0] if len(devices) == 1 else None,
+                        )
+                        if chosen is not None:
+                            return self._save_cloud(chosen)
+                        return await self.async_step_cloud_device()
+
+        current_interval = options.get(
             CONF_SCAN_INTERVAL,
             self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
         )
 
         schema = vol.Schema(
             {
+                vol.Required(
+                    CONF_DATA_SOURCE,
+                    default=options.get(CONF_DATA_SOURCE, SOURCE_LOCAL),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=DATA_SOURCES,
+                        translation_key=CONF_DATA_SOURCE,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 vol.Optional(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
                     int, vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL)
+                ),
+                vol.Optional(
+                    CONF_EMAIL, default=options.get(CONF_EMAIL, "")
+                ): str,
+                vol.Optional(
+                    CONF_PASSWORD, default=options.get(CONF_PASSWORD, "")
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                 ),
             }
         )
 
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(
+            step_id="init", data_schema=schema, errors=errors
+        )
+
+    async def async_step_cloud_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Pick which battery on the cloud account this entry represents."""
+        if user_input is not None:
+            devid = user_input[CONF_CLOUD_DEVID]
+            device = next(
+                (d for d in self._devices if str(d.get("devid")) == devid),
+                None,
+            )
+            if device is not None:
+                return self._save_cloud(device)
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_CLOUD_DEVID): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {
+                                "value": str(dev.get("devid")),
+                                "label": f"{dev.get('name', 'Marstek')} ({dev.get('sn', dev.get('devid'))})",
+                            }
+                            for dev in self._devices
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                )
+            }
+        )
+
+        return self.async_show_form(step_id="cloud_device", data_schema=schema)
+
+    def _save_cloud(self, device: dict[str, Any]) -> FlowResult:
+        """Store the chosen cloud device and finish the flow."""
+        self._options[CONF_CLOUD_DEVID] = str(device.get("devid"))
+        return self.async_create_entry(title="", data=self._options)
