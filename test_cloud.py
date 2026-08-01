@@ -98,6 +98,30 @@ def test_mapping():
     assert info["device"] == "HMG-50" and info["ver"] == "156", info
 
 
+def test_report_time():
+    from datetime import datetime, timezone
+
+    expected = datetime(2026, 8, 1, 5, 18, 43, tzinfo=timezone.utc)
+
+    # seconds and milliseconds must land on the same instant
+    assert cloud.cloud_report_time({"report_time": 1785561523}) == expected
+    assert cloud.cloud_report_time({"report_time": "1785561523"}) == expected
+    assert cloud.cloud_report_time({"report_time": 1785561523000}) == expected
+
+    # a bare date string is read as UTC; an explicit offset is honoured
+    assert cloud.cloud_report_time({"report_time": "2026-08-01 05:18:43"}) == expected
+    assert cloud.cloud_report_time({"report_time": "2026/08/01 05:18:43"}) == expected
+    assert cloud.cloud_report_time({"report_time": "2026-08-01T07:18:43+02:00"}) == expected
+
+    # anything unusable is None, never a fabricated time
+    for bad in ({}, {"report_time": None}, {"report_time": ""}, {"report_time": 0},
+                {"report_time": -5}, {"report_time": "not a date"}):
+        assert cloud.cloud_report_time(bad) is None, bad
+
+    # the parsed value must be timezone-aware, or HA rejects a timestamp sensor
+    assert cloud.cloud_report_time({"report_time": 1785561523}).tzinfo is not None
+
+
 async def test_token_refresh():
     # First device call comes back without "data" (stale token), so the client must
     # log in again and retry exactly once.
@@ -142,6 +166,7 @@ async def test_login_rejected():
 
 async def main():
     test_mapping()
+    test_report_time()
     await test_token_refresh()
     await test_permission_error()
     await test_login_rejected()

@@ -136,6 +136,9 @@
       },
       "cloud_profit": {
         "name": "Profit (Cloud)"
+      },
+      "cloud_report_time": {
+        "name": "Last Cloud Report"
       }
     },
     "select": {

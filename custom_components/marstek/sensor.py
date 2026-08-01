@@ -28,6 +28,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from homeassistant.config_entries import ConfigEntry
+from .cloud import cloud_report_time
 from .const import DOMAIN
 from .coordinator import MarstekDataUpdateCoordinator
 
@@ -311,6 +312,18 @@ SENSORS: tuple[MarstekSensorEntityDescription, ...] = (
         state_class=SensorStateClass.TOTAL,
         icon="mdi:cash",
         value_fn=lambda data: _get_val(data, ("cloud", "profit")),
+        local=False,
+        cloud=True,
+    ),
+    # How stale the cloud reading is - the cloud only returns the last snapshot
+    # the station uploaded, so this is the real resolution of cloud mode.
+    MarstekSensorEntityDescription(
+        key="cloud_report_time",
+        translation_key="cloud_report_time",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:cloud-clock",
+        value_fn=lambda data: cloud_report_time(data.get("cloud") or {}),
         local=False,
         cloud=True,
     ),

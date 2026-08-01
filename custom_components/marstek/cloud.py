@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
@@ -121,6 +122,37 @@ def cloud_to_data(device: dict[str, Any]) -> dict[str, Any]:
         data["es_status"] = es_status
 
     return data
+
+
+def cloud_report_time(device: dict[str, Any]) -> datetime | None:
+    """Parse the station's last-report timestamp into an aware datetime.
+
+    This field is what makes cloud mode judgeable: it says how stale the reading
+    is, since the cloud only ever returns the last snapshot the station uploaded.
+    The format is undocumented, so both an epoch and a date string are accepted
+    and anything else yields None rather than a guess.
+    """
+    raw = device.get("report_time")
+    if raw is None or raw == "":
+        return None
+
+    ts = _num(raw)
+    if ts is not None:
+        if ts > 1e11:  # reported in milliseconds
+            ts /= 1000
+        if ts <= 0:
+            return None
+        try:
+            return datetime.fromtimestamp(ts, tz=timezone.utc)
+        except (OSError, OverflowError, ValueError):
+            return None
+
+    try:
+        parsed = datetime.fromisoformat(str(raw).strip().replace("/", "-"))
+    except ValueError:
+        return None
+    # A bare timestamp carrying no offset is read as UTC.
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def cloud_device_info(device: dict[str, Any]) -> dict[str, Any]:

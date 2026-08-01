@@ -136,6 +136,9 @@
       },
       "cloud_profit": {
         "name": "Прибуток (хмара)"
+      },
+      "cloud_report_time": {
+        "name": "Останній звіт у хмару"
       }
     },
     "select": {
