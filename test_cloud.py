@@ -122,6 +122,36 @@ def test_report_time():
     assert cloud.cloud_report_time({"report_time": 1785561523}).tzinfo is not None
 
 
+def test_stale():
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 9, 20, 6, 0, tzinfo=timezone.utc)
+    fresh = {"report_time": (now - timedelta(minutes=5)).timestamp()}
+    frozen = {"report_time": (now - timedelta(days=30)).timestamp()}
+
+    assert cloud.cloud_is_stale(frozen, 3600, now) is True
+    assert cloud.cloud_is_stale(fresh, 3600, now) is False
+    # exactly at the threshold is not yet stale
+    assert cloud.cloud_is_stale({"report_time": (now - timedelta(seconds=3600)).timestamp()}, 3600, now) is False
+    # no usable report time means nothing to judge, never a false alarm
+    assert cloud.cloud_is_stale({}, 3600, now) is False
+    assert cloud.cloud_is_stale({"report_time": "not a date"}, 3600, now) is False
+
+
+async def test_invalidate_token():
+    session = FakeSession(
+        logins=[{"token": "T1"}, {"token": "T2"}],
+        device_lists=[{"data": [DEVICE]}, {"data": [DEVICE]}],
+    )
+    client = cloud.MarstekCloudClient(session, "a@b.c", "pw")
+    await client.async_get_devices()
+    client.invalidate_token()
+    await client.async_get_devices()
+    # the second cycle must log in again and carry the new token
+    assert len(session.login_params) == 2, session.login_params
+    assert [p["token"] for p in session.device_params] == ["T1", "T2"]
+
+
 async def test_token_refresh():
     # First device call comes back without "data" (stale token), so the client must
     # log in again and retry exactly once.
@@ -167,6 +197,8 @@ async def test_login_rejected():
 async def main():
     test_mapping()
     test_report_time()
+    test_stale()
+    await test_invalidate_token()
     await test_token_refresh()
     await test_permission_error()
     await test_login_rejected()

@@ -30,6 +30,10 @@ DATA_SOURCES: Final = [SOURCE_LOCAL, SOURCE_CLOUD]
 CLOUD_API_LOGIN: Final = "https://eu.hamedata.com/app/Solar/v2_get_device.php"
 CLOUD_API_DEVICES: Final = "https://eu.hamedata.com/ems/api/v1/getDeviceList"
 CLOUD_TIMEOUT: Final = 10
+# The cloud can keep serving a frozen snapshot on a token it still accepts, so
+# staleness is judged on the station's own report time, not on HTTP errors.
+CLOUD_STALE_AFTER: Final = 3600  # seconds before the snapshot counts as stuck
+CLOUD_RELOGIN_COOLDOWN: Final = 900  # seconds between forced re-logins
 
 # API Methods
 METHOD_GET_DEVICE: Final = "Marstek.GetDevice"

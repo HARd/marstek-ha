@@ -37,6 +37,10 @@ class MarstekCloudClient:
         self._password = password
         self._token: str | None = None
 
+    def invalidate_token(self) -> None:
+        """Drop the cached token so the next request logs in again."""
+        self._token = None
+
     async def _async_login(self) -> None:
         """Exchange credentials for a token."""
         # The API expects the password MD5-hashed as a query parameter. That is its
@@ -153,6 +157,21 @@ def cloud_report_time(device: dict[str, Any]) -> datetime | None:
         return None
     # A bare timestamp carrying no offset is read as UTC.
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def cloud_is_stale(
+    device: dict[str, Any], max_age: float, now: datetime | None = None
+) -> bool:
+    """True if the station's last cloud report is older than max_age seconds.
+
+    A device with no usable report time is not judged stale - there is nothing to
+    judge it by, and guessing would take working entities offline.
+    """
+    report = cloud_report_time(device)
+    if report is None:
+        return False
+    now = now or datetime.now(timezone.utc)
+    return (now - report).total_seconds() > max_age
 
 
 def cloud_device_info(device: dict[str, Any]) -> dict[str, Any]:
