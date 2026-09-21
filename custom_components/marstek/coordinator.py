@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from datetime import timedelta
 from typing import Any
 
@@ -15,16 +14,9 @@ from .cloud import (
     MarstekCloudClient,
     MarstekCloudError,
     cloud_device_info,
-    cloud_is_stale,
     cloud_to_data,
 )
-from .const import (
-    CLOUD_RELOGIN_COOLDOWN,
-    CLOUD_STALE_AFTER,
-    DEFAULT_SCAN_INTERVAL,
-    DOMAIN,
-    SLOW_UPDATE_CYCLES,
-)
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, SLOW_UPDATE_CYCLES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +48,6 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_passive_cd_time: int = 3600
         self._consecutive_errors: int = 0
         self._slow_countdown: int = 0
-        self._cloud_relogin_at: float = 0.0
 
     def request_full_update(self) -> None:
         """Force the slow endpoint group to be polled on the next update."""
@@ -87,30 +78,9 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not self.device_info_data:
             self.device_info_data = cloud_device_info(device)
 
-        self._cloud_check_stale(device)
-
         data = cloud_to_data(device)
         data["device_info"] = self.device_info_data
         return data
-
-    def _cloud_check_stale(self, device: dict[str, Any]) -> None:
-        """Re-login when the cloud keeps serving the same old snapshot.
-
-        The token stays accepted, so nothing fails - the device list just freezes
-        at the last report the station uploaded. Logging in again is what unsticks
-        it, rate-limited so a genuinely offline station is not hammered.
-        """
-        if not cloud_is_stale(device, CLOUD_STALE_AFTER):
-            return
-        now = time.monotonic()
-        if now - self._cloud_relogin_at < CLOUD_RELOGIN_COOLDOWN:
-            return
-        self._cloud_relogin_at = now
-        _LOGGER.warning(
-            "Marstek cloud snapshot has not moved for over %s min, forcing a re-login",
-            CLOUD_STALE_AFTER // 60,
-        )
-        self.cloud.invalidate_token()
 
     async def _async_update_local(self) -> dict[str, Any]:
         """Fetch data from Marstek device via UDP."""
