@@ -16,12 +16,7 @@ from .cloud import (
     cloud_device_info,
     cloud_to_data,
 )
-from .const import (
-    BAT_UPDATE_CYCLES,
-    DEFAULT_SCAN_INTERVAL,
-    DOMAIN,
-    SLOW_UPDATE_CYCLES,
-)
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, SLOW_UPDATE_CYCLES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,12 +48,10 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_passive_cd_time: int = 3600
         self._consecutive_errors: int = 0
         self._slow_countdown: int = 0
-        self._bat_countdown: int = 0
 
     def request_full_update(self) -> None:
         """Force the slow endpoint group to be polled on the next update."""
         self._slow_countdown = 0
-        self._bat_countdown = 0
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch telemetry from whichever source this entry is configured for."""
@@ -94,7 +87,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Start with a shallow copy of previous valid data so temporary UDP packet loss does not cause sensors to flip to Unknown/Unavailable
         data: dict[str, Any] = dict(self.data) if self.data else {}
 
-        # Only ES/Bat telemetry needs per-cycle resolution. Everything else changes
+        # Only ES telemetry needs per-cycle resolution. Everything else changes
         # slowly, and the device reboots if we flood it with UDP requests.
         run_slow = self._slow_countdown <= 0
         self._slow_countdown = SLOW_UPDATE_CYCLES - 1 if run_slow else self._slow_countdown - 1
@@ -124,22 +117,15 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 raise UpdateFailed(f"Error communicating with Marstek device: {err}") from err
             _LOGGER.debug("Temporary UDP packet drop for ES.GetStatus (attempt %s), retaining previous valid telemetry", self._consecutive_errors)
 
-        # Small delay between UDP packets to prevent buffer congestion on ESP-style Wi-Fi modules
-        await asyncio.sleep(0.25)
+        # Bat.GetStatus is not polled at all: it is the measured trigger for the
+        # firmware switching its own Open API off, and dropping it took the
+        # station from a reset every ~2h to one every ~11 days. SOC and capacity
+        # come from ES.GetStatus instead; battery temperature, rated capacity and
+        # the charge/discharge permission flags have no other source and stay
+        # empty. ponytail: re-add the call once a firmware stops resetting.
+        # https://github.com/MarstekEnergy/aiomarstek/issues/2
 
-        # 2. Fetch Battery Status (soc, charg_flag, dischrg_flag, temp, capacity)
-        if self._bat_countdown <= 0:
-            self._bat_countdown = BAT_UPDATE_CYCLES - 1
-            try:
-                bat_res = await self.client.async_get_bat_status()
-                if bat_res and "result" in bat_res:
-                    data["bat_status"] = bat_res["result"]
-            except Exception as err:
-                _LOGGER.debug("Could not fetch Bat.GetStatus: %s", err)
-        else:
-            self._bat_countdown -= 1
-
-        # 3. Slow group - mode, PV, meter, wifi and BLE barely move between cycles,
+        # 2. Slow group - mode, PV, meter, wifi and BLE barely move between cycles,
         # so they are polled once every SLOW_UPDATE_CYCLES instead of every update.
         if run_slow:
             for method, fetch, key in (
