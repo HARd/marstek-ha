@@ -70,6 +70,15 @@ MIN_PASSIVE_POWER: Final = 0
 MAX_PASSIVE_POWER: Final = 5000
 DEFAULT_PASSIVE_CD_TIME: Final = 3600  # 1 hour default countdown
 
+# Entities dropped along with Bat.GetStatus. Their registry entries are removed on
+# setup, otherwise they linger on the device page as permanently Unknown.
+RETIRED_ENTITY_KEYS: Final = (
+    "battery_temperature",
+    "rated_capacity",
+    "battery_charging_permission",
+    "battery_discharging_permission",
+)
+
 # Platforms
 PLATFORMS: Final = [
     "binary_sensor",

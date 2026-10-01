@@ -5,6 +5,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import MarstekApiClient
@@ -21,6 +22,7 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     PLATFORMS,
+    RETIRED_ENTITY_KEYS,
     SOURCE_CLOUD,
     SOURCE_LOCAL,
 )
@@ -36,8 +38,24 @@ def _platforms(entry: ConfigEntry) -> list[str]:
     return PLATFORMS
 
 
+def _remove_retired_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Delete registry entries for entities this version no longer provides.
+
+    Only the explicitly retired keys are touched. Entities that are simply not
+    loaded right now - every local one while the entry runs in cloud mode - must
+    survive, because they come back when the source is switched again.
+    """
+    registry = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if any(entity.unique_id.endswith(f"_{key}") for key in RETIRED_ENTITY_KEYS):
+            _LOGGER.debug("Removing retired Marstek entity %s", entity.entity_id)
+            registry.async_remove(entity.entity_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Marstek Energy System from a config entry."""
+    _remove_retired_entities(hass, entry)
+
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
     scan_interval = entry.options.get(

@@ -19,7 +19,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from homeassistant.config_entries import ConfigEntry
 from .const import (
-    DEFAULT_DOD,
     DOMAIN,
     MAX_DOD,
     MAX_PASSIVE_POWER,
@@ -116,8 +115,8 @@ class MarstekNumberEntity(CoordinatorEntity[MarstekDataUpdateCoordinator], Numbe
     def native_value(self) -> float | None:
         """Return the current value."""
         if self.entity_description.key == "depth_of_discharge":
-            # Some models report dod in bat_status or DOD query, default fallback
-            return self.coordinator.data.get("bat_status", {}).get("dod", DEFAULT_DOD)
+            # The API has no DOD getter, so the last value set here is all there is.
+            return self.coordinator.last_dod
         if self.entity_description.key == "passive_mode_power":
             return self.coordinator.last_passive_power
         return None
@@ -128,6 +127,7 @@ class MarstekNumberEntity(CoordinatorEntity[MarstekDataUpdateCoordinator], Numbe
         if self.entity_description.key == "depth_of_discharge":
             _LOGGER.debug("Setting Marstek DOD to %d%%", int_val)
             await self.coordinator.client.async_set_dod(int_val)
+            self.coordinator.last_dod = int_val
         elif self.entity_description.key == "passive_mode_power":
             _LOGGER.debug("Setting Marstek passive mode power to %d W", int_val)
             self.coordinator.last_passive_power = int_val

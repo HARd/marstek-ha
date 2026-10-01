@@ -63,26 +63,11 @@ BINARY_SENSORS: tuple[MarstekBinarySensorEntityDescription, ...] = (
         translation_key="battery_charging",
         device_class=BinarySensorDeviceClass.BATTERY_CHARGING,
         icon="mdi:battery-charging",
+        # Positive battery power means charging. charg_flag used to gate this, but
+        # it came from Bat.GetStatus, which is no longer polled.
         value_fn=lambda data: (
-            data.get("bat_status", {}).get("charg_flag", False) is True
-            and (
-                data.get("es_status", {}).get("bat_power", 0) > 5
-                or data.get("es_status", {}).get("ongrid_power", 0) > 10
-                or data.get("pv_status", {}).get("pv_power", 0) > 10
-            )
-        ) if "bat_status" in data or "es_status" in data else None,
-    ),
-    MarstekBinarySensorEntityDescription(
-        key="battery_charging_permission",
-        translation_key="battery_charging_permission",
-        icon="mdi:shield-check",
-        value_fn=lambda data: data.get("bat_status", {}).get("charg_flag") if "bat_status" in data else None,
-    ),
-    MarstekBinarySensorEntityDescription(
-        key="battery_discharging_permission",
-        translation_key="battery_discharging_permission",
-        icon="mdi:battery-minus",
-        value_fn=lambda data: data.get("bat_status", {}).get("dischrg_flag") if "bat_status" in data else None,
+            data.get("es_status", {}).get("bat_power", 0) > 5
+        ) if "es_status" in data else None,
     ),
     MarstekBinarySensorEntityDescription(
         key="ct_connected",

@@ -19,7 +19,6 @@ from homeassistant.const import (
     UnitOfElectricPotential,
     UnitOfEnergy,
     UnitOfPower,
-    UnitOfTemperature,
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
@@ -173,16 +172,6 @@ SENSORS: tuple[MarstekSensorEntityDescription, ...] = (
         icon="mdi:current-dc",
         value_fn=_get_pv_current,
     ),
-    # Battery Temperature
-    MarstekSensorEntityDescription(
-        key="battery_temperature",
-        translation_key="battery_temperature",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:thermometer",
-        value_fn=lambda data: _get_val(data, ("bat_status", "bat_temp")),
-    ),
     # Battery Capacity
     MarstekSensorEntityDescription(
         key="battery_capacity",
@@ -192,17 +181,6 @@ SENSORS: tuple[MarstekSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:battery-50",
         value_fn=lambda data: _get_val(data, ("bat_status", "bat_capacity"), ("es_status", "bat_cap")),
-    ),
-    # Rated Capacity
-    MarstekSensorEntityDescription(
-        key="rated_capacity",
-        translation_key="rated_capacity",
-        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
-        device_class=getattr(SensorDeviceClass, "ENERGY_STORAGE", "energy_storage"),
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        icon="mdi:battery",
-        value_fn=lambda data: _get_val(data, ("bat_status", "rated_capacity")),
     ),
     # Remaining Runtime
     MarstekSensorEntityDescription(

@@ -16,7 +16,7 @@ from .cloud import (
     cloud_device_info,
     cloud_to_data,
 )
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, SLOW_UPDATE_CYCLES
+from .const import DEFAULT_DOD, DEFAULT_SCAN_INTERVAL, DOMAIN, SLOW_UPDATE_CYCLES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.cloud_devid = cloud_devid
         self.platforms: list[str] = []
         self.device_info_data: dict[str, Any] = {}
+        self.last_dod: int = DEFAULT_DOD
         self.last_passive_power: int = 100
         self.last_passive_cd_time: int = 3600
         self._consecutive_errors: int = 0
