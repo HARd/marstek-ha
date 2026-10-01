@@ -6,7 +6,7 @@ DEFAULT_NAME: Final = "Marstek"
 DEFAULT_PORT: Final = 30000
 DEFAULT_SCAN_INTERVAL: Final = 10  # seconds, fast for Switchbot response
 MIN_SCAN_INTERVAL: Final = 5
-MAX_SCAN_INTERVAL: Final = 60
+MAX_SCAN_INTERVAL: Final = 300  # the firmware resets under poll load, so allow 5 minutes
 # Slow-changing endpoints (mode, PV, meter, wifi, BLE) are polled once every N cycles
 SLOW_UPDATE_CYCLES: Final = 6
 
