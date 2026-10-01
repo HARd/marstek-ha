@@ -44,6 +44,23 @@ class MarstekProtocolError(MarstekApiError):
     """Invalid or error response received from Marstek device."""
 
 
+def fw_major(ver: Any) -> int | None:
+    """Return the Control firmware major version, or None if it is unreadable.
+
+    Firmware is reported as 148, "148", "147.6" or 1476 depending on model and
+    endpoint, so everything is reduced to the leading three-digit number.
+    """
+    digits = ""
+    for char in str(ver):
+        if char.isdigit():
+            digits += char
+        elif digits:
+            break
+    if not digits:
+        return None
+    return int(digits[:3])
+
+
 class MarstekApiClient:
     """Async UDP client for Marstek devices (Open API Rev 2.0)."""
 
@@ -56,10 +73,13 @@ class MarstekApiClient:
         self._sock: socket.socket | None = None
 
     def _next_id(self) -> int:
-        """Get the next sequential message ID."""
-        self._msg_id = (self._msg_id + 1) % 100000
-        if self._msg_id == 0:
-            self._msg_id = 1
+        """Get the next sequential message ID.
+
+        The station truncates the id to 16 bits, so ids above 65535 come back
+        changed and every reply would look like someone else's. 0 is skipped
+        because the device uses it in parse-error replies.
+        """
+        self._msg_id = self._msg_id % 65535 + 1
         return self._msg_id
 
     async def async_send_command(

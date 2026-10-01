@@ -9,14 +9,20 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import MarstekApiClient, MarstekApiError
+from .api import MarstekApiClient, MarstekApiError, fw_major
 from .cloud import (
     MarstekCloudClient,
     MarstekCloudError,
     cloud_device_info,
     cloud_to_data,
 )
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, SLOW_UPDATE_CYCLES
+from .const import (
+    BAT_LEGACY_CYCLES,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    FW_LOCAL_API_FIXED,
+    SLOW_UPDATE_CYCLES,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,10 +54,24 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_passive_cd_time: int = 3600
         self._consecutive_errors: int = 0
         self._slow_countdown: int = 0
+        self._bat_countdown: int = 0
 
     def request_full_update(self) -> None:
         """Force the slow endpoint group to be polled on the next update."""
         self._slow_countdown = 0
+        self._bat_countdown = 0
+
+    def _bat_cycles(self) -> int:
+        """How many update cycles to leave between Bat.GetStatus calls.
+
+        On firmware that still has the Open API reset bug this endpoint is the
+        trigger, so it is asked for roughly once an hour instead of every cycle.
+        Previous values are carried forward, so the entities keep reading.
+        """
+        ver = fw_major(self.device_info_data.get("ver"))
+        if ver is None or ver >= FW_LOCAL_API_FIXED:
+            return 1
+        return BAT_LEGACY_CYCLES
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch telemetry from whichever source this entry is configured for."""
@@ -121,12 +141,16 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await asyncio.sleep(0.25)
 
         # 2. Fetch Battery Status (soc, charg_flag, dischrg_flag, temp, capacity)
-        try:
-            bat_res = await self.client.async_get_bat_status()
-            if bat_res and "result" in bat_res:
-                data["bat_status"] = bat_res["result"]
-        except Exception as err:
-            _LOGGER.debug("Could not fetch Bat.GetStatus: %s", err)
+        if self._bat_countdown <= 0:
+            self._bat_countdown = self._bat_cycles() - 1
+            try:
+                bat_res = await self.client.async_get_bat_status()
+                if bat_res and "result" in bat_res:
+                    data["bat_status"] = bat_res["result"]
+            except Exception as err:
+                _LOGGER.debug("Could not fetch Bat.GetStatus: %s", err)
+        else:
+            self._bat_countdown -= 1
 
         # 3. Slow group - mode, PV, meter, wifi and BLE barely move between cycles,
         # so they are polled once every SLOW_UPDATE_CYCLES instead of every update.

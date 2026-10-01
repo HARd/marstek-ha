@@ -90,10 +90,25 @@ async def main() -> None:
     res = await client.async_get_wifi_status()
     assert "result" in res, res
 
+    # 5. Request ids stay inside the uint16 range the station echoes back, and
+    #    never hit 0, which the device uses in parse-error replies.
+    client._msg_id = 65534
+    assert [client._next_id() for _ in range(3)] == [65535, 1, 2]
+
     server.cancel()
     client.close()
     dev.sock.close()
     print("ok")
 
 
+def test_fw_major():
+    # the same firmware is reported in all of these shapes
+    for raw, expected in (
+        (148, 148), ("148", 148), ("147.6", 147), (1476, 147), ("150", 150),
+        ("v150 build 2026-08-11", 150), ("", None), (None, None), ("beta", None),
+    ):
+        assert api.fw_major(raw) == expected, (raw, api.fw_major(raw))
+
+
+test_fw_major()
 asyncio.run(main())

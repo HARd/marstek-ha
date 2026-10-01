@@ -9,6 +9,12 @@ MIN_SCAN_INTERVAL: Final = 5
 MAX_SCAN_INTERVAL: Final = 60
 # Slow-changing endpoints (mode, PV, meter, wifi, BLE) are polled once every N cycles
 SLOW_UPDATE_CYCLES: Final = 6
+# Control firmware below this turns its own Open API off under poll load and
+# reverts the mode to Manual. Bat.GetStatus is the measured trigger: polling it
+# every cycle gives a reset every ~2h, dropping it gives ~11 days.
+# https://github.com/MarstekEnergy/aiomarstek/issues/2
+FW_LOCAL_API_FIXED: Final = 150
+BAT_LEGACY_CYCLES: Final = 360  # once an hour at the 10s default interval
 
 # Configuration keys
 CONF_HOST: Final = "host"
