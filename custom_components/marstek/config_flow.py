@@ -29,7 +29,6 @@ from .const import (
     DOMAIN,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
-    SOURCE_CLOUD,
     SOURCE_LOCAL,
 )
 
