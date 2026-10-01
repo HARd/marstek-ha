@@ -29,7 +29,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.config_entries import ConfigEntry
 from .cloud import cloud_report_time
 from .const import DOMAIN
-from .coordinator import MarstekDataUpdateCoordinator
+from .coordinator import MarstekDataUpdateCoordinator, device_id
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -341,13 +341,7 @@ class MarstekSensorEntity(CoordinatorEntity[MarstekDataUpdateCoordinator], Senso
         self.entity_description = description
 
         dev_info = coordinator.device_info_data or {}
-        # entry.unique_id keeps ids stable in cloud mode, where there is no MAC
-        mac = (
-            dev_info.get("wifi_mac")
-            or dev_info.get("ble_mac")
-            or entry.unique_id
-            or entry.data["host"]
-        )
+        mac = device_id(entry)
         dev_name = dev_info.get("device", "Marstek Energy System")
 
         self._attr_unique_id = f"{mac}_{description.key}"

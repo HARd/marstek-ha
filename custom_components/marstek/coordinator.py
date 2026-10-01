@@ -6,6 +6,7 @@ import logging
 from datetime import timedelta
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -19,6 +20,16 @@ from .cloud import (
 from .const import DEFAULT_DOD, DEFAULT_SCAN_INTERVAL, DOMAIN, SLOW_UPDATE_CYCLES
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def device_id(entry: ConfigEntry) -> str:
+    """Return the id every entity and device of this entry is keyed on.
+
+    It has to be the same in cloud and local mode and survive a GetDevice that
+    went unanswered, so it comes from the config entry and never from telemetry.
+    The entry's own unique id is the station's MAC when discovery could read one.
+    """
+    return entry.unique_id or entry.entry_id
 
 
 class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):

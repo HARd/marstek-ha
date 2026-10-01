@@ -21,12 +21,13 @@ from .const import (
     CONF_SCAN_INTERVAL,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
     PLATFORMS,
     RETIRED_ENTITY_KEYS,
     SOURCE_CLOUD,
     SOURCE_LOCAL,
 )
-from .coordinator import MarstekDataUpdateCoordinator
+from .coordinator import MarstekDataUpdateCoordinator, device_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +51,40 @@ def _remove_retired_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
         if any(entity.unique_id.endswith(f"_{key}") for key in RETIRED_ENTITY_KEYS):
             _LOGGER.debug("Removing retired Marstek entity %s", entity.entity_id)
             registry.async_remove(entity.entity_id)
+
+
+def _merge_duplicate_entities(
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: MarstekDataUpdateCoordinator
+) -> None:
+    """Fold entities registered under an older id scheme onto the pinned one.
+
+    Ids used to start with the MAC when GetDevice had answered and with the
+    config entry's id when it had not, so a missed reply or a switch to cloud
+    mode registered a second copy of every entity, suffixed _2. Copies whose
+    pinned id is already taken are the leftovers and get removed.
+    """
+    target = device_id(entry)
+    info = coordinator.device_info_data or {}
+    stale = {info.get("wifi_mac"), info.get("ble_mac"), entry.data.get(CONF_HOST)}
+    stale -= {None, "", target}
+
+    registry = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+        prefix = next((p for p in stale if entity.unique_id.startswith(f"{p}_")), None)
+        if prefix is None:
+            continue
+        pinned = f"{target}{entity.unique_id[len(prefix):]}"
+        if registry.async_get_entity_id(entity.domain, DOMAIN, pinned):
+            _LOGGER.debug("Removing duplicate Marstek entity %s", entity.entity_id)
+            registry.async_remove(entity.entity_id)
+        else:
+            registry.async_update_entity(entity.entity_id, new_unique_id=pinned)
+
+    # Hand back the plain entity ids the removed copies were holding.
+    for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+        base, _, tail = entity.entity_id.rpartition("_")
+        if tail.isdigit() and registry.async_get(base) is None:
+            registry.async_update_entity(entity.entity_id, new_entity_id=base)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -96,6 +131,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Remember what was actually loaded: switching the data source reloads the entry,
     # and unload must tear down the old platform set, not the one the new options imply.
+    _merge_duplicate_entities(hass, entry, coordinator)
+
     coordinator.platforms = _platforms(entry)
     entry.runtime_data = coordinator
 

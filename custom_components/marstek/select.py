@@ -12,7 +12,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from homeassistant.config_entries import ConfigEntry
 from .const import DOMAIN, OPERATING_MODES
-from .coordinator import MarstekDataUpdateCoordinator
+from .coordinator import MarstekDataUpdateCoordinator, device_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class MarstekOperatingModeSelect(CoordinatorEntity[MarstekDataUpdateCoordinator]
         """Initialize the select entity."""
         super().__init__(coordinator)
         dev_info = coordinator.device_info_data or {}
-        mac = dev_info.get("wifi_mac") or dev_info.get("ble_mac") or entry.data["host"]
+        mac = device_id(entry)
         dev_name = dev_info.get("device", "Marstek Energy System")
 
         self._attr_unique_id = f"{mac}_operating_mode"

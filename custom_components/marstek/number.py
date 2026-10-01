@@ -26,7 +26,7 @@ from .const import (
     MIN_PASSIVE_POWER,
     MODE_PASSIVE,
 )
-from .coordinator import MarstekDataUpdateCoordinator
+from .coordinator import MarstekDataUpdateCoordinator, device_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ class MarstekNumberEntity(CoordinatorEntity[MarstekDataUpdateCoordinator], Numbe
         self._attr_native_step = description.step_value
 
         dev_info = coordinator.device_info_data or {}
-        mac = dev_info.get("wifi_mac") or dev_info.get("ble_mac") or entry.data["host"]
+        mac = device_id(entry)
         dev_name = dev_info.get("device", "Marstek Energy System")
 
         self._attr_unique_id = f"{mac}_{description.key}"
