@@ -9,7 +9,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import MarstekApiClient, MarstekApiError, fw_major
+from .api import MarstekApiClient, MarstekApiError
 from .cloud import (
     MarstekCloudClient,
     MarstekCloudError,
@@ -17,10 +17,9 @@ from .cloud import (
     cloud_to_data,
 )
 from .const import (
-    BAT_LEGACY_CYCLES,
+    BAT_UPDATE_CYCLES,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
-    FW_LOCAL_API_FIXED,
     SLOW_UPDATE_CYCLES,
 )
 
@@ -60,18 +59,6 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Force the slow endpoint group to be polled on the next update."""
         self._slow_countdown = 0
         self._bat_countdown = 0
-
-    def _bat_cycles(self) -> int:
-        """How many update cycles to leave between Bat.GetStatus calls.
-
-        On firmware that still has the Open API reset bug this endpoint is the
-        trigger, so it is asked for roughly once an hour instead of every cycle.
-        Previous values are carried forward, so the entities keep reading.
-        """
-        ver = fw_major(self.device_info_data.get("ver"))
-        if ver is None or ver >= FW_LOCAL_API_FIXED:
-            return 1
-        return BAT_LEGACY_CYCLES
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch telemetry from whichever source this entry is configured for."""
@@ -142,7 +129,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # 2. Fetch Battery Status (soc, charg_flag, dischrg_flag, temp, capacity)
         if self._bat_countdown <= 0:
-            self._bat_countdown = self._bat_cycles() - 1
+            self._bat_countdown = BAT_UPDATE_CYCLES - 1
             try:
                 bat_res = await self.client.async_get_bat_status()
                 if bat_res and "result" in bat_res:

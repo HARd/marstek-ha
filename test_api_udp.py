@@ -101,14 +101,4 @@ async def main() -> None:
     print("ok")
 
 
-def test_fw_major():
-    # the same firmware is reported in all of these shapes
-    for raw, expected in (
-        (148, 148), ("148", 148), ("147.6", 147), (1476, 147), ("150", 150),
-        ("v150 build 2026-08-11", 150), ("", None), (None, None), ("beta", None),
-    ):
-        assert api.fw_major(raw) == expected, (raw, api.fw_major(raw))
-
-
-test_fw_major()
 asyncio.run(main())

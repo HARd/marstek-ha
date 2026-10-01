@@ -44,23 +44,6 @@ class MarstekProtocolError(MarstekApiError):
     """Invalid or error response received from Marstek device."""
 
 
-def fw_major(ver: Any) -> int | None:
-    """Return the Control firmware major version, or None if it is unreadable.
-
-    Firmware is reported as 148, "148", "147.6" or 1476 depending on model and
-    endpoint, so everything is reduced to the leading three-digit number.
-    """
-    digits = ""
-    for char in str(ver):
-        if char.isdigit():
-            digits += char
-        elif digits:
-            break
-    if not digits:
-        return None
-    return int(digits[:3])
-
-
 class MarstekApiClient:
     """Async UDP client for Marstek devices (Open API Rev 2.0)."""
 
