@@ -59,6 +59,12 @@ A custom Home Assistant integration for **Marstek** energy storage systems and b
 6. Select the discovered device or enter its IP address and port manually.
 7. Polling interval can be adjusted in the integration options (default: 10 seconds).
 
+### Marstek V500 (Bluetooth, experimental)
+
+The V500 portable power station has no Open API, so it is read over Bluetooth LE instead of UDP. Home Assistant needs a Bluetooth adapter or an ESPHome Bluetooth proxy within range; the station is then discovered automatically (`HM_V500_*`) or listed under **Add Integration -> Marstek**.
+
+It exposes SOC, remaining energy (Wh), AC output power, AC input power and state, rated power, the Wi-Fi SSID, and an **AC Output** switch. Home Assistant keeps the Bluetooth link open, so the Marstek app can only reach the station over Wi-Fi meanwhile. Byte offsets come from [falseroses/ha-marstek-ble](https://github.com/falseroses/ha-marstek-ble).
+
 ### Available Entities
 
 | Entity | Type | Description | API Specification |
@@ -137,6 +143,12 @@ A custom Home Assistant integration for **Marstek** energy storage systems and b
 5. Знайдіть **Marstek**.
 6. Оберіть знайдений у мережі пристрій або введіть його IP-адресу та порт вручну.
 7. Інтервал опитування можна змінити в параметрах інтеграції (за замовчуванням: 10 секунд).
+
+### Marstek V500 (Bluetooth, експериментально)
+
+Портативна станція V500 не має Open API, тому вона читається через Bluetooth LE, а не UDP. Home Assistant потрібен Bluetooth-адаптер або ESPHome Bluetooth proxy поруч зі станцією; тоді вона знаходиться автоматично (`HM_V500_*`) або з'являється у списку **Додати інтеграцію -> Marstek**.
+
+Доступні: SOC, залишок енергії (Wh), вихідна потужність AC, вхідна потужність і стан входу AC, номінальна потужність, SSID Wi-Fi та перемикач **Вихід AC**. Home Assistant тримає Bluetooth-з'єднання відкритим, тож застосунок Marstek у цей час бачить станцію лише через Wi-Fi. Зміщення байтів узято з [falseroses/ha-marstek-ble](https://github.com/falseroses/ha-marstek-ble).
 
 ### Опис доступних сутностей (Entities)
 

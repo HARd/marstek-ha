@@ -11,6 +11,7 @@ from homeassistant.components.switch import (
     SwitchEntity,
     SwitchEntityDescription,
 )
+from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -56,6 +57,18 @@ SWITCH_TYPES: tuple[MarstekSwitchEntityDescription, ...] = (
 )
 
 
+V500_SWITCHES: tuple[MarstekSwitchEntityDescription, ...] = (
+    MarstekSwitchEntityDescription(
+        key="ac_output",
+        translation_key="ac_output",
+        device_class=SwitchDeviceClass.OUTLET,
+        is_on_fn=lambda data: data.get("ac_output"),
+        turn_on_fn=lambda coord: coord.async_set_ac_output(True),
+        turn_off_fn=lambda coord: coord.async_set_ac_output(False),
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -65,7 +78,7 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     async_add_entities(
         MarstekSwitchEntity(coordinator, description, entry)
-        for description in SWITCH_TYPES
+        for description in (V500_SWITCHES if CONF_ADDRESS in entry.data else SWITCH_TYPES)
     )
 
 
@@ -92,7 +105,7 @@ class MarstekSwitchEntity(CoordinatorEntity[MarstekDataUpdateCoordinator], Switc
         self._attr_unique_id = f"{mac}_{description.key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac)},
-            name=f"{dev_name} ({entry.data['host']})",
+            name=f"{dev_name} ({entry.data.get('host') or entry.data[CONF_ADDRESS]})",
             manufacturer="Marstek",
             model=dev_info.get("device", "Energy Storage System"),
             sw_version=str(dev_info.get("ver", "")),

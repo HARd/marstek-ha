@@ -12,6 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
+    CONF_ADDRESS,
     CURRENCY_EURO,
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
@@ -308,6 +309,65 @@ SENSORS: tuple[MarstekSensorEntityDescription, ...] = (
 )
 
 
+# The V500 is read over Bluetooth and reports a different, much smaller set.
+V500_SENSORS: tuple[MarstekSensorEntityDescription, ...] = (
+    MarstekSensorEntityDescription(
+        key="battery_soc",
+        translation_key="battery_soc",
+        native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.get("soc"),
+    ),
+    MarstekSensorEntityDescription(
+        key="battery_capacity",
+        translation_key="battery_capacity",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        device_class=getattr(SensorDeviceClass, "ENERGY_STORAGE", "energy_storage"),
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.get("remaining_capacity"),
+    ),
+    MarstekSensorEntityDescription(
+        key="output_power",
+        translation_key="output_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.get("output_power"),
+    ),
+    MarstekSensorEntityDescription(
+        key="ac_input_power",
+        translation_key="ac_input_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.get("ac_input_power"),
+    ),
+    MarstekSensorEntityDescription(
+        key="ac_input_state",
+        translation_key="ac_input_state",
+        device_class=SensorDeviceClass.ENUM,
+        options=["disconnected", "connected", "charging"],
+        value_fn=lambda data: data.get("ac_input_state"),
+    ),
+    MarstekSensorEntityDescription(
+        key="rated_power",
+        translation_key="rated_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.get("rated_power"),
+    ),
+    MarstekSensorEntityDescription(
+        key="wifi_ssid",
+        translation_key="wifi_ssid",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:wifi-settings",
+        value_fn=lambda data: data.get("wifi_ssid"),
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -315,6 +375,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up Marstek sensor entities based on a config entry."""
     coordinator = entry.runtime_data
+    if CONF_ADDRESS in entry.data:
+        async_add_entities(
+            MarstekSensorEntity(coordinator, description, entry)
+            for description in V500_SENSORS
+        )
+        return
+
     is_cloud = coordinator.cloud is not None
 
     async_add_entities(
@@ -347,7 +414,7 @@ class MarstekSensorEntity(CoordinatorEntity[MarstekDataUpdateCoordinator], Senso
         self._attr_unique_id = f"{mac}_{description.key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac)},
-            name=f"{dev_name} ({entry.data['host']})",
+            name=f"{dev_name} ({entry.data.get('host') or entry.data[CONF_ADDRESS]})",
             manufacturer="Marstek",
             model=dev_info.get("device", "Energy Storage System"),
             sw_version=str(dev_info.get("ver", "")),

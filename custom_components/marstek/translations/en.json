@@ -16,6 +16,10 @@
           "port": "UDP Port",
           "scan_interval": "Update Interval (seconds)"
         }
+      },
+      "bluetooth_confirm": {
+        "title": "Marstek V500",
+        "description": "Set up the Marstek V500 power station {name} over Bluetooth? While Home Assistant holds the connection, the Marstek app can only reach it over Wi-Fi."
       }
     },
     "error": {
@@ -23,7 +27,8 @@
     },
     "abort": {
       "already_configured": "Device is already configured."
-    }
+    },
+    "flow_title": "{name}"
   },
   "options": {
     "step": {
@@ -42,6 +47,12 @@
         "description": "Your account has several batteries. Pick the one this entry represents.",
         "data": {
           "cloud_devid": "Battery"
+        }
+      },
+      "v500": {
+        "title": "Marstek V500 Options",
+        "data": {
+          "scan_interval": "Update Interval (seconds)"
         }
       }
     },
@@ -139,6 +150,23 @@
       },
       "cloud_report_time": {
         "name": "Last Cloud Report"
+      },
+      "output_power": {
+        "name": "AC Output Power"
+      },
+      "ac_input_power": {
+        "name": "AC Input Power"
+      },
+      "rated_power": {
+        "name": "Rated Output Power"
+      },
+      "ac_input_state": {
+        "name": "AC Input",
+        "state": {
+          "disconnected": "Disconnected",
+          "connected": "Connected",
+          "charging": "Charging"
+        }
       }
     },
     "select": {
@@ -167,6 +195,9 @@
       },
       "bluetooth_broadcast": {
         "name": "Bluetooth Broadcast"
+      },
+      "ac_output": {
+        "name": "AC Output"
       }
     }
   },

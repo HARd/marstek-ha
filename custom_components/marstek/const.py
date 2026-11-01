@@ -88,6 +88,12 @@ PLATFORMS: Final = [
     "switch",
 ]
 
+# A V500 is reached over Bluetooth and only exposes telemetry plus its AC output.
+V500_PLATFORMS: Final = [
+    "sensor",
+    "switch",
+]
+
 # The cloud API is read-only, so control platforms are not loaded in cloud mode.
 CLOUD_PLATFORMS: Final = [
     "sensor",

@@ -1,6 +1,8 @@
 {
   "domain": "marstek",
   "name": "Marstek Energy System",
+  "after_dependencies": ["bluetooth"],
+  "bluetooth": [{"local_name": "HM_V500_*", "connectable": true}],
   "codeowners": ["@Erleke"],
   "config_flow": true,
   "documentation": "https://github.com/Erleke/marstek",

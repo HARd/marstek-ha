@@ -27,6 +27,11 @@ TO_REDACT = {
     "sn",
     "devid",
     "cloud_devid",
+    # V500 over Bluetooth
+    "address",
+    "mac",
+    "id",
+    "wifi_ssid",
 }
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
@@ -26,6 +27,7 @@ from .const import (
     RETIRED_ENTITY_KEYS,
     SOURCE_CLOUD,
     SOURCE_LOCAL,
+    V500_PLATFORMS,
 )
 from .coordinator import MarstekDataUpdateCoordinator, device_id
 
@@ -91,6 +93,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Marstek Energy System from a config entry."""
     _remove_retired_entities(hass, entry)
 
+    if CONF_ADDRESS in entry.data:
+        return await _async_setup_v500(hass, entry)
+
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
     scan_interval = entry.options.get(
@@ -106,6 +111,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     client = MarstekApiClient(host=host, port=port)
+    entry.async_on_unload(client.close)
     cloud: MarstekCloudClient | None = None
 
     if use_cloud:
@@ -143,14 +149,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def _async_setup_v500(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up a Marstek V500, which is reached over Bluetooth instead of UDP."""
+    from homeassistant.components import bluetooth  # loaded only when a V500 is configured
+
+    from .v500 import MarstekV500Coordinator, V500Client
+
+    address = entry.data[CONF_ADDRESS]
+    client = V500Client(
+        entry.title,
+        lambda: bluetooth.async_ble_device_from_address(hass, address, connectable=True),
+    )
+    entry.async_on_unload(client.disconnect)
+
+    coordinator = MarstekV500Coordinator(
+        hass,
+        client,
+        entry.options.get(CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)),
+    )
+    await coordinator.async_config_entry_first_refresh()
+
+    coordinator.platforms = V500_PLATFORMS
+    entry.runtime_data = coordinator
+    await hass.config_entries.async_forward_entry_setups(entry, coordinator.platforms)
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    return True
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(
+    """Unload a config entry. The client is closed by its on_unload callback."""
+    return await hass.config_entries.async_unload_platforms(
         entry, entry.runtime_data.platforms
-    ):
-        entry.runtime_data.client.close()
-        _LOGGER.debug("Successfully unloaded Marstek integration for %s", entry.title)
-    return unload_ok
+    )
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:

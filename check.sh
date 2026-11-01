@@ -6,3 +6,4 @@ set -e
 ruff check --select F custom_components/
 python3 test_api_udp.py
 python3 test_cloud.py
+python3 test_v500.py

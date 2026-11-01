@@ -16,6 +16,10 @@
           "port": "UDP Порт",
           "scan_interval": "Інтервал оновлення (секунд)"
         }
+      },
+      "bluetooth_confirm": {
+        "title": "Marstek V500",
+        "description": "Додати зарядну станцію Marstek V500 {name} через Bluetooth? Поки Home Assistant тримає з'єднання, застосунок Marstek бачить її лише через Wi-Fi."
       }
     },
     "error": {
@@ -23,7 +27,8 @@
     },
     "abort": {
       "already_configured": "Цей пристрій вже налаштовано в Home Assistant."
-    }
+    },
+    "flow_title": "{name}"
   },
   "options": {
     "step": {
@@ -42,6 +47,12 @@
         "description": "На акаунті кілька батарей. Вибери ту, якій відповідає цей запис.",
         "data": {
           "cloud_devid": "Батарея"
+        }
+      },
+      "v500": {
+        "title": "Налаштування Marstek V500",
+        "data": {
+          "scan_interval": "Інтервал оновлення (секунди)"
         }
       }
     },
@@ -139,6 +150,23 @@
       },
       "cloud_report_time": {
         "name": "Останній звіт у хмару"
+      },
+      "output_power": {
+        "name": "Вихідна потужність AC"
+      },
+      "ac_input_power": {
+        "name": "Вхідна потужність AC"
+      },
+      "rated_power": {
+        "name": "Номінальна вихідна потужність"
+      },
+      "ac_input_state": {
+        "name": "Вхід AC",
+        "state": {
+          "disconnected": "Відключено",
+          "connected": "Підключено",
+          "charging": "Заряджається"
+        }
       }
     },
     "select": {
@@ -167,6 +195,9 @@
       },
       "bluetooth_broadcast": {
         "name": "Трансляція Bluetooth (BLE)"
+      },
+      "ac_output": {
+        "name": "Вихід AC"
       }
     }
   },

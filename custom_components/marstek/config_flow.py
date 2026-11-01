@@ -7,6 +7,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
@@ -35,6 +36,8 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 MANUAL_ENTRY_KEY = "manual_entry"
+# Kept here rather than imported from v500.py, which pulls in bleak.
+V500_NAME_PREFIX = "HM_V500_"
 
 
 class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -45,6 +48,34 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize the config flow."""
         self._discovered_devices: dict[str, dict[str, Any]] = {}
+        # V500 power stations found over Bluetooth: address -> advertised name
+        self._ble_devices: dict[str, str] = {}
+
+    async def async_step_bluetooth(self, discovery_info: Any) -> FlowResult:
+        """Handle a V500 that Home Assistant's Bluetooth scanner found."""
+        await self.async_set_unique_id(discovery_info.address)
+        self._abort_if_unique_id_configured()
+        self._ble_devices[discovery_info.address] = discovery_info.name
+        self.context["title_placeholders"] = {"name": discovery_info.name}
+        return await self.async_step_bluetooth_confirm()
+
+    async def async_step_bluetooth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Confirm adding a discovered V500."""
+        if user_input is not None:
+            return self._create_v500_entry(self.unique_id)
+        self._set_confirm_only()
+        return self.async_show_form(
+            step_id="bluetooth_confirm",
+            description_placeholders={"name": self._ble_devices[self.unique_id]},
+        )
+
+    def _create_v500_entry(self, address: str) -> FlowResult:
+        return self.async_create_entry(
+            title=f"Marstek V500 ({self._ble_devices[address]})",
+            data={CONF_ADDRESS: address, CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL},
+        )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -57,6 +88,11 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if selected == MANUAL_ENTRY_KEY:
                 return await self.async_step_manual()
             
+            if selected in self._ble_devices:
+                await self.async_set_unique_id(selected)
+                self._abort_if_unique_id_configured()
+                return self._create_v500_entry(selected)
+
             if selected and selected in self._discovered_devices:
                 dev = self._discovered_devices[selected]
                 host = dev["ip"]
@@ -86,10 +122,20 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception as err:
             _LOGGER.debug("Discovery error: %s", err)
 
+        if "bluetooth" in self.hass.config.components:
+            from homeassistant.components import bluetooth
+
+            configured = self._async_current_ids()
+            for info in bluetooth.async_discovered_service_info(self.hass, connectable=True):
+                if (info.name or "").startswith(V500_NAME_PREFIX) and info.address not in configured:
+                    self._ble_devices[info.address] = info.name
+
         device_options: list[selector.SelectOptionDict] = []
         for mac, dev in self._discovered_devices.items():
             label = f"{dev.get('device', 'Marstek')} ({dev['ip']}) [MAC: {mac}]"
             device_options.append({"value": mac, "label": label})
+        for address, name in self._ble_devices.items():
+            device_options.append({"value": address, "label": f"{name} (Bluetooth) [{address}]"})
 
         device_options.append({"value": MANUAL_ENTRY_KEY, "label": "Ввести IP та Порт вручну / Manual IP Entry"})
 
@@ -196,6 +242,9 @@ class MarstekOptionsFlowHandler(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         options = self.config_entry.options
 
+        if CONF_ADDRESS in self.config_entry.data:
+            return await self.async_step_v500(user_input)
+
         if user_input is not None:
             # Carry the existing options forward so the credentials stay on file even
             # while running local - flipping the source back is then a one-click
@@ -276,6 +325,28 @@ class MarstekOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init", data_schema=schema, errors=errors
         )
+
+    async def async_step_v500(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """A V500 has neither a cloud mode nor UDP, only the poll interval."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="", data={**self.config_entry.options, **user_input}
+            )
+
+        current = self.config_entry.options.get(
+            CONF_SCAN_INTERVAL,
+            self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+        )
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_SCAN_INTERVAL, default=current): vol.All(
+                    int, vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL)
+                ),
+            }
+        )
+        return self.async_show_form(step_id="v500", data_schema=schema)
 
     async def async_step_cloud_device(
         self, user_input: dict[str, Any] | None = None
