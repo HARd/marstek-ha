@@ -112,6 +112,8 @@ class FakeBleak:
     async def write_gatt_char(self, _char, data, response=None):
         assert response is False, "the V500 is written without response"
         self.written.append(bytes(data))
+        if len(self.written) == 1:
+            return  # the first request after connecting goes unanswered
         reply = self.replies.get(data[3])
         if reply is not None:
             async def push():
@@ -170,6 +172,7 @@ async def check_client() -> None:
     client = v500.V500Client("HM_V500_test", lambda: object())
 
     assert await client.request(0x03) == runtime_frame()
+    assert len(fake.written) == 2  # answered on the retry, same link
     assert set(fake.notify) == {"ff01", "ff02", "ff06"}  # vendor ones, in any service
     assert v500.parse_text(await client.request(0x08)) == "home"
 
@@ -181,7 +184,7 @@ async def check_client() -> None:
     try:
         await client.request(0x13)
     except v500.V500Error as err:
-        assert "ff02 73402313" in str(err), err
+        assert "after 3 tries" in str(err) and "ff02 73402313" in str(err), err
         assert "listening on: ff01@ff00, ff02@ff00, ff06@ff05" in str(err), err
     else:
         raise AssertionError("unanswered request did not fail")

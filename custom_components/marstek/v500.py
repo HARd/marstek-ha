@@ -41,8 +41,10 @@ CMD_RUNTIME = 0x03
 CMD_DEVICE_INFO = 0x04
 CMD_WIFI_SSID = 0x08
 
-# The V500 takes 2-2.5 s to answer a request.
-RESPONSE_TIMEOUT = 5.0
+# The V500 takes 2-2.5 s to answer a request, and can let one go unanswered
+# (the first after connecting, at least), so a request is sent a few times.
+RESPONSE_TIMEOUT = 3.0
+REQUEST_ATTEMPTS = 3
 
 AC_INPUT_STATES = {0: "disconnected", 1: "connected", 2: "charging"}
 
@@ -115,20 +117,25 @@ class V500Client:
             future = asyncio.get_running_loop().create_future()
             self._waiter = (cmd, future)
             self._heard.clear()
+            for buf in self._bufs.values():
+                buf.clear()
             try:
-                await self._write(build_frame(cmd))
-                async with asyncio.timeout(RESPONSE_TIMEOUT):
-                    return await future
-            except TimeoutError as err:
-                # A link can stay up while the station stops answering; start fresh.
-                await self.disconnect()
-                heard = "; ".join(self._heard) or "nothing"
-                raise V500Error(
-                    f"no answer to 0x{cmd:02X}, heard: {heard},"
-                    f" listening on: {', '.join(self._listening) or 'nothing'}"
-                ) from err
+                for _ in range(REQUEST_ATTEMPTS):
+                    await self._write(build_frame(cmd))
+                    # wait() leaves the future pending on timeout, so a late
+                    # answer to an earlier attempt still counts.
+                    if (await asyncio.wait({future}, timeout=RESPONSE_TIMEOUT))[0]:
+                        return future.result()
             finally:
                 self._waiter = None
+
+            # A link can stay up while the station stops answering; start fresh.
+            await self.disconnect()
+            raise V500Error(
+                f"no answer to 0x{cmd:02X} after {REQUEST_ATTEMPTS} tries,"
+                f" heard: {'; '.join(self._heard) or 'nothing'},"
+                f" listening on: {', '.join(self._listening) or 'nothing'}"
+            )
 
     async def set_ac_output(self, on: bool) -> None:
         """Switch the AC output. The new state shows in the next runtime frame."""
@@ -147,8 +154,6 @@ class V500Client:
     async def _write(self, frame: bytes) -> None:
         try:
             client = await self._connect()
-            for buf in self._bufs.values():
-                buf.clear()
             # Without response, as the Marstek app writes: the V500 is not known
             # to acknowledge write requests.
             await client.write_gatt_char(CHAR_WRITE, frame, response=False)
