@@ -31,7 +31,6 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-SERVICE = "0000ff00-0000-1000-8000-00805f9b34fb"
 CHAR_WRITE = "0000ff01-0000-1000-8000-00805f9b34fb"
 
 FRAME_START = 0x73
@@ -103,8 +102,9 @@ class V500Client:
         self._ble_device = ble_device
         self._client: BleakClientWithServiceCache | None = None
         self._lock = asyncio.Lock()
-        # One reassembly buffer per characteristic, so chunks never interleave.
-        self._bufs: dict[str, bytearray] = {}
+        # One reassembly buffer per characteristic handle, so chunks never interleave.
+        self._bufs: dict[int, bytearray] = {}
+        self._listening: list[str] = []
         self._waiter: tuple[int, asyncio.Future[bytes]] | None = None
         # The last raw notifications, quoted in errors so a failure shows what did arrive.
         self._heard: deque[str] = deque(maxlen=3)
@@ -123,7 +123,10 @@ class V500Client:
                 # A link can stay up while the station stops answering; start fresh.
                 await self.disconnect()
                 heard = "; ".join(self._heard) or "nothing"
-                raise V500Error(f"no answer to 0x{cmd:02X}, heard: {heard}") from err
+                raise V500Error(
+                    f"no answer to 0x{cmd:02X}, heard: {heard},"
+                    f" listening on: {', '.join(self._listening) or 'nothing'}"
+                ) from err
             finally:
                 self._waiter = None
 
@@ -166,15 +169,15 @@ class V500Client:
             disconnected_callback=self._on_disconnect,
             ble_device_callback=self._ble_device,
         )
-        # Listen on every notifying characteristic of the service: answers are
-        # known on ff02, and the probes that mapped the V500 also listened on ff01 and ff06.
-        service = client.services.get_service(SERVICE)
-        if service is None:
-            await client.disconnect()
-            raise V500Error(f"{self._name} has no Marstek service {SERVICE}")
-        for char in service.characteristics:
-            if {"notify", "indicate"} & set(char.properties):
-                await client.start_notify(char, self._notify_handler(char.uuid))
+        # Listen on every vendor (0xFFxx) characteristic that notifies, in any
+        # service: the probes that mapped the V500 listened on ff01, ff02 and ff06.
+        self._listening = []
+        for service in client.services:
+            for char in service.characteristics:
+                if char.uuid.startswith("0000ff") and {"notify", "indicate"} & set(char.properties):
+                    await client.start_notify(char, self._notify_handler(char))
+                    self._listening.append(f"{char.uuid[4:8]}@{service.uuid[4:8]}")
+        _LOGGER.debug("%s: connected, listening on %s", self._name, self._listening)
         self._client = client
         return client
 
@@ -182,9 +185,9 @@ class V500Client:
         if client is self._client:
             self._client = None
 
-    def _notify_handler(self, uuid: str) -> Callable[[Any, bytearray], None]:
-        buf = self._bufs.setdefault(uuid, bytearray())
-        return lambda _sender, data: self._on_notify(uuid, buf, data)
+    def _notify_handler(self, char: Any) -> Callable[[Any, bytearray], None]:
+        buf = self._bufs.setdefault(char.handle, bytearray())
+        return lambda _sender, data: self._on_notify(char.uuid, buf, data)
 
     def _on_notify(self, uuid: str, buf: bytearray, data: bytearray) -> None:
         """Reassemble frames: one can arrive split over several notifications."""

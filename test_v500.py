@@ -70,28 +70,35 @@ def text_frame(cmd: int, text: str) -> bytes:
 
 
 class FakeChar:
-    def __init__(self, uuid, *properties):
+    def __init__(self, handle, uuid, *properties):
+        self.handle = handle
         self.uuid = f"0000{uuid}-0000-1000-8000-00805f9b34fb"
         self.properties = list(properties)
 
 
 class FakeService:
-    characteristics = [
-        FakeChar("ff01", "write-without-response", "write", "notify"),
-        FakeChar("ff02", "notify"),
-        FakeChar("ff03", "read"),
-    ]
+    def __init__(self, uuid, *characteristics):
+        self.uuid = f"0000{uuid}-0000-1000-8000-00805f9b34fb"
+        self.characteristics = list(characteristics)
 
 
-class FakeServices:
-    def get_service(self, uuid):
-        return FakeService() if uuid == v500.SERVICE else None
+# ff06 sits in its own service, and a standard 0x2Axx characteristic notifies too.
+FAKE_SERVICES = [
+    FakeService("1801", FakeChar(3, "2a05", "indicate")),
+    FakeService(
+        "ff00",
+        FakeChar(10, "ff01", "write-without-response", "write", "notify"),
+        FakeChar(13, "ff02", "notify"),
+        FakeChar(16, "ff03", "read"),
+    ),
+    FakeService("ff05", FakeChar(20, "ff06", "notify")),
+]
 
 
 class FakeBleak:
     """Answers each write on ff02 in 20-byte notifications, while ff01 chatters."""
 
-    services = FakeServices()
+    services = FAKE_SERVICES
 
     def __init__(self, replies):
         self.replies = replies
@@ -163,7 +170,7 @@ async def check_client() -> None:
     client = v500.V500Client("HM_V500_test", lambda: object())
 
     assert await client.request(0x03) == runtime_frame()
-    assert set(fake.notify) == {"ff01", "ff02"}  # every notifying characteristic
+    assert set(fake.notify) == {"ff01", "ff02", "ff06"}  # vendor ones, in any service
     assert v500.parse_text(await client.request(0x08)) == "home"
 
     await client.set_ac_output(False)
@@ -175,6 +182,7 @@ async def check_client() -> None:
         await client.request(0x13)
     except v500.V500Error as err:
         assert "ff02 73402313" in str(err), err
+        assert "listening on: ff01@ff00, ff02@ff00, ff06@ff05" in str(err), err
     else:
         raise AssertionError("unanswered request did not fail")
     assert not fake.is_connected and client._client is None
