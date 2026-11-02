@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
+from collections import deque
 from collections.abc import Callable
 from datetime import timedelta
 from functools import reduce
@@ -30,8 +31,8 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+SERVICE = "0000ff00-0000-1000-8000-00805f9b34fb"
 CHAR_WRITE = "0000ff01-0000-1000-8000-00805f9b34fb"
-CHAR_NOTIFY = "0000ff02-0000-1000-8000-00805f9b34fb"
 
 FRAME_START = 0x73
 FRAME_READ = 0x23
@@ -102,14 +103,18 @@ class V500Client:
         self._ble_device = ble_device
         self._client: BleakClientWithServiceCache | None = None
         self._lock = asyncio.Lock()
-        self._buf = bytearray()
+        # One reassembly buffer per characteristic, so chunks never interleave.
+        self._bufs: dict[str, bytearray] = {}
         self._waiter: tuple[int, asyncio.Future[bytes]] | None = None
+        # The last raw notifications, quoted in errors so a failure shows what did arrive.
+        self._heard: deque[str] = deque(maxlen=3)
 
     async def request(self, cmd: int) -> bytes:
         """Send a read command and return the frame that answers it."""
         async with self._lock:
             future = asyncio.get_running_loop().create_future()
             self._waiter = (cmd, future)
+            self._heard.clear()
             try:
                 await self._write(build_frame(cmd))
                 async with asyncio.timeout(RESPONSE_TIMEOUT):
@@ -117,7 +122,8 @@ class V500Client:
             except TimeoutError as err:
                 # A link can stay up while the station stops answering; start fresh.
                 await self.disconnect()
-                raise V500Error(f"no answer to 0x{cmd:02X}") from err
+                heard = "; ".join(self._heard) or "nothing"
+                raise V500Error(f"no answer to 0x{cmd:02X}, heard: {heard}") from err
             finally:
                 self._waiter = None
 
@@ -138,8 +144,11 @@ class V500Client:
     async def _write(self, frame: bytes) -> None:
         try:
             client = await self._connect()
-            self._buf.clear()
-            await client.write_gatt_char(CHAR_WRITE, frame)
+            for buf in self._bufs.values():
+                buf.clear()
+            # Without response, as the Marstek app writes: the V500 is not known
+            # to acknowledge write requests.
+            await client.write_gatt_char(CHAR_WRITE, frame, response=False)
         except (BleakError, TimeoutError) as err:
             await self.disconnect()
             raise V500Error(f"{self._name}: {err}") from err
@@ -157,7 +166,15 @@ class V500Client:
             disconnected_callback=self._on_disconnect,
             ble_device_callback=self._ble_device,
         )
-        await client.start_notify(CHAR_NOTIFY, self._on_notify)
+        # Listen on every notifying characteristic of the service: answers are
+        # known on ff02, and the probes that mapped the V500 also listened on ff01 and ff06.
+        service = client.services.get_service(SERVICE)
+        if service is None:
+            await client.disconnect()
+            raise V500Error(f"{self._name} has no Marstek service {SERVICE}")
+        for char in service.characteristics:
+            if {"notify", "indicate"} & set(char.properties):
+                await client.start_notify(char, self._notify_handler(char.uuid))
         self._client = client
         return client
 
@@ -165,25 +182,31 @@ class V500Client:
         if client is self._client:
             self._client = None
 
-    def _on_notify(self, _sender: Any, data: bytearray) -> None:
+    def _notify_handler(self, uuid: str) -> Callable[[Any, bytearray], None]:
+        buf = self._bufs.setdefault(uuid, bytearray())
+        return lambda _sender, data: self._on_notify(uuid, buf, data)
+
+    def _on_notify(self, uuid: str, buf: bytearray, data: bytearray) -> None:
         """Reassemble frames: one can arrive split over several notifications."""
-        self._buf += data
+        _LOGGER.debug("%s %s: %s", self._name, uuid[4:8], data.hex(" "))
+        self._heard.append(f"{uuid[4:8]} {data[:24].hex()}")
+        buf += data
         while True:
-            start = self._buf.find(FRAME_START)
+            start = buf.find(FRAME_START)
             if start < 0:
-                self._buf.clear()
+                buf.clear()
                 return
-            del self._buf[:start]
-            if len(self._buf) < 2:
+            del buf[:start]
+            if len(buf) < 2:
                 return
-            length = self._buf[1]
+            length = buf[1]
             if length < 5:  # not a real frame start, look for the next one
-                del self._buf[0]
+                del buf[0]
                 continue
-            if len(self._buf) < length:
+            if len(buf) < length:
                 return
-            frame = bytes(self._buf[:length])
-            del self._buf[:length]
+            frame = bytes(buf[:length])
+            del buf[:length]
             if self._waiter and self._waiter[0] == frame[3] and not self._waiter[1].done():
                 self._waiter[1].set_result(frame)
 

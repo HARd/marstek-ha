@@ -69,27 +69,51 @@ def text_frame(cmd: int, text: str) -> bytes:
     return frame + bytes([reduce(xor, frame)])
 
 
+class FakeChar:
+    def __init__(self, uuid, *properties):
+        self.uuid = f"0000{uuid}-0000-1000-8000-00805f9b34fb"
+        self.properties = list(properties)
+
+
+class FakeService:
+    characteristics = [
+        FakeChar("ff01", "write-without-response", "write", "notify"),
+        FakeChar("ff02", "notify"),
+        FakeChar("ff03", "read"),
+    ]
+
+
+class FakeServices:
+    def get_service(self, uuid):
+        return FakeService() if uuid == v500.SERVICE else None
+
+
 class FakeBleak:
-    """Answers each write by pushing the reply back in 20-byte notifications."""
+    """Answers each write on ff02 in 20-byte notifications, while ff01 chatters."""
+
+    services = FakeServices()
 
     def __init__(self, replies):
         self.replies = replies
         self.is_connected = True
         self.written = []
-        self.notify = None
+        self.notify = {}
 
-    async def start_notify(self, _char, callback):
-        self.notify = callback
+    async def start_notify(self, char, callback):
+        self.notify[char.uuid[4:8]] = callback
 
-    async def write_gatt_char(self, _char, data):
+    async def write_gatt_char(self, _char, data, response=None):
+        assert response is False, "the V500 is written without response"
         self.written.append(bytes(data))
         reply = self.replies.get(data[3])
         if reply is not None:
             async def push():
-                self.notify(None, bytearray(b"\x00\x01"))  # line noise before the frame
+                self.notify["ff02"](None, bytearray(b"\x00\x01"))  # line noise before the frame
                 for i in range(0, len(reply), 20):
                     await asyncio.sleep(0)
-                    self.notify(None, bytearray(reply[i:i + 20]))
+                    # A frame start on another characteristic must not corrupt this one.
+                    self.notify["ff01"](None, bytearray(b"\x73\x30\x23"))
+                    self.notify["ff02"](None, bytearray(reply[i:i + 20]))
             asyncio.get_running_loop().create_task(push())
 
     async def disconnect(self):
@@ -129,7 +153,7 @@ def check_frames() -> None:
 
 
 async def check_client() -> None:
-    fake = FakeBleak({0x03: runtime_frame(), 0x08: text_frame(0x08, "home")})
+    fake = FakeBleak({0x03: runtime_frame(), 0x08: text_frame(0x08, "home"), 0x13: b"\x73\x40\x23\x13"})
 
     async def establish(*_args, **_kwargs):
         return fake
@@ -139,16 +163,18 @@ async def check_client() -> None:
     client = v500.V500Client("HM_V500_test", lambda: object())
 
     assert await client.request(0x03) == runtime_frame()
+    assert set(fake.notify) == {"ff01", "ff02"}  # every notifying characteristic
     assert v500.parse_text(await client.request(0x08)) == "home"
 
     await client.set_ac_output(False)
     assert fake.written[-1] == bytes.fromhex("730624020053")
 
-    # 0x0D is never answered: the request fails and the dead link is dropped.
+    # A truncated answer never completes: the request fails, says what did
+    # arrive, and the dead link is dropped.
     try:
-        await client.request(0x0D)
-    except v500.V500Error:
-        pass
+        await client.request(0x13)
+    except v500.V500Error as err:
+        assert "ff02 73402313" in str(err), err
     else:
         raise AssertionError("unanswered request did not fail")
     assert not fake.is_connected and client._client is None
